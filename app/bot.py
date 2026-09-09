@@ -25,12 +25,27 @@ def build_dispatcher(
 ) -> Dispatcher:
     dp = Dispatcher()
 
+    @dp.message()
+    async def on_any_message(message) -> None:
+        # Faqat diagnostika uchun — polling umuman ishlayaptimi, shuni ko'rsatadi.
+        logger.info("RAW MESSAGE: chat.id=%s text=%r", message.chat.id, message.text)
+
     @dp.message_reaction()
     async def on_reaction(event: MessageReactionUpdated) -> None:
+        logger.info(
+            "RAW REACTION: chat.id=%s (kutilgan=%s) message_id=%s new=%s old=%s",
+            event.chat.id, config.sales_group_chat_id, event.message_id,
+            event.new_reaction, event.old_reaction,
+        )
         if event.chat.id != config.sales_group_chat_id:
+            logger.warning(
+                "Chat ID mos kelmadi: kelgan=%s, kutilgan=%s — o'tkazib yuborildi",
+                event.chat.id, config.sales_group_chat_id,
+            )
             return
         if not event.new_reaction:
-            return  # reaksiya olib tashlandi, qo'shilmadi
+            logger.info("Reaksiya olib tashlandi (qo'shilmadi) — o'tkazib yuborildi")
+            return
 
         result = await process_reaction(
             chat_id=event.chat.id,
@@ -61,7 +76,7 @@ async def main() -> None:
 
     logger.info("sales-sync boshlandi (guruh=%s)", config.sales_group_chat_id)
     try:
-        await dp.start_polling(bot, allowed_updates=["message_reaction"])
+        await dp.start_polling(bot, allowed_updates=["message", "message_reaction"])
     finally:
         state.close()
 
