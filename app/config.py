@@ -12,16 +12,33 @@ class Config:
     ombor_actor_name: str
     state_database_path: str
     # Analytics'ning qat'iy mahsulot kodlari (masalan "palov", "mol_tushonka")
-    # Ombor'ning external_code'iga xaritasi. Owner tomonidan bir marta to'ldiriladi.
-    product_code_map: dict[str, str] = field(default_factory=dict)
+    # Ombor'ning external_code'iga xaritasi. Qiymat bitta kod (string) yoki
+    # bir nechta kod (list) bo'lishi mumkin — ba'zi taomlar (masalan "Qozon
+    # kabob") bitta buyurtma birligi uchun bir nechta ALOHIDA bankaga
+    # (Ombor mahsuloti) bo'linadi. Owner tomonidan bir marta to'ldiriladi.
+    product_code_map: dict[str, list[str]] = field(default_factory=dict)
 
 
 def load_config() -> Config:
     raw_map = os.getenv("PRODUCT_CODE_MAP", "{}")
     try:
-        product_code_map = json.loads(raw_map)
+        parsed = json.loads(raw_map)
     except json.JSONDecodeError as e:
         raise RuntimeError(f"PRODUCT_CODE_MAP noto'g'ri JSON: {e}")
+
+    # Har bir qiymatni ro'yxatga normallashtiramiz — chaqiruvchi kod bitta
+    # ("palov": "PALOV") yoki bir nechta ("qozon_kabob": ["A", "B"]) berishi
+    # mumkin, ikkalasi ham qo'llab-quvvatlanadi.
+    product_code_map: dict[str, list[str]] = {}
+    for key, value in parsed.items():
+        if isinstance(value, str):
+            product_code_map[key] = [value]
+        elif isinstance(value, list):
+            product_code_map[key] = value
+        else:
+            raise RuntimeError(
+                f"PRODUCT_CODE_MAP['{key}'] noto'g'ri turda: string yoki list bo'lishi kerak"
+            )
 
     return Config(
         sales_bot_token=os.environ["SALES_BOT_TOKEN"],

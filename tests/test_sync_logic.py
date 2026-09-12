@@ -16,7 +16,7 @@ def make_config(product_code_map=None, ombor_base_url="http://ombor.test"):
         ombor_api_base_url=ombor_base_url,
         ombor_actor_name="sales-sync-test",
         state_database_path=":memory:",
-        product_code_map=product_code_map or {"palov": "PALOV_ANDIJON", "dimlama": "DIMLAMA_1KG"},
+        product_code_map=product_code_map or {"palov": ["PALOV_ANDIJON"], "dimlama": ["DIMLAMA_1KG"]},
     )
 
 
@@ -66,6 +66,30 @@ async def test_matched_order_pushed_to_ombor(analytics, state_db_path):
         {"finished_product_external_code": "PALOV_ANDIJON", "quantity": "96", "unit": "dona"}
     ]
     assert pushed[0]["source_id"] == "analytics-order:555"
+    state.close()
+
+
+@pytest.mark.asyncio
+async def test_split_product_creates_two_ombor_lines(analytics, state_db_path):
+    # "Qozon kabob" kabi taomlar bitta buyurtma birligi uchun 2 ta alohida
+    # bankaga (Ombor mahsuloti) bo'linadi - har biriga bir xil miqdor.
+    analytics.add_order(chat_id=-100123, message_id=30, order_id=800, items=[("qozon_kabob", 2)])
+    pushed = []
+    ombor = make_ombor(default_handler_factory(pushed))
+    state = StateStore(state_db_path)
+    config = make_config(
+        product_code_map={"qozon_kabob": ["QOZON_KABOB_GOSHT", "QOZON_KABOB_FRI"]}
+    )
+
+    result = await process_reaction(-100123, 30, config, analytics, ombor, state)
+
+    assert result.outcome == "synced"
+    assert len(pushed[0]["items"]) == 2
+    codes = {item["finished_product_external_code"] for item in pushed[0]["items"]}
+    assert codes == {"QOZON_KABOB_GOSHT", "QOZON_KABOB_FRI"}
+    # Ikkalasi ham bir xil miqdorda (har bir buyurtma birligi har bir
+    # komponentdan bittadan talab qiladi)
+    assert all(item["quantity"] == "2" for item in pushed[0]["items"])
     state.close()
 
 

@@ -54,17 +54,22 @@ async def process_reaction(
     resolved_items = []
     unresolved_codes = []
     for item in order.items:
-        ombor_code = config.product_code_map.get(item.product_code)
-        if not ombor_code:
+        ombor_codes = config.product_code_map.get(item.product_code)
+        if not ombor_codes:
             unresolved_codes.append(item.product_code)
             continue
-        resolved_items.append(
-            {
-                "finished_product_external_code": ombor_code,
-                "quantity": str(item.units_total),
-                "unit": "dona",
-            }
-        )
+        # Ba'zi taomlar (masalan "Qozon kabob") bitta buyurtma birligi
+        # uchun bir nechta ALOHIDA bankaga (Ombor mahsuloti) bo'linadi —
+        # har biriga BIR XIL miqdor (units_total) yuboriladi, chunki har
+        # bir buyurtma birligi har bir komponentdan bittadan talab qiladi.
+        for ombor_code in ombor_codes:
+            resolved_items.append(
+                {
+                    "finished_product_external_code": ombor_code,
+                    "quantity": str(item.units_total),
+                    "unit": "dona",
+                }
+            )
 
     if unresolved_codes:
         reason = f"PRODUCT_CODE_MAP'da yo'q: {', '.join(sorted(set(unresolved_codes)))}"
