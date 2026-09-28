@@ -17,6 +17,7 @@ class Config:
     # kabob") bitta buyurtma birligi uchun bir nechta ALOHIDA bankaga
     # (Ombor mahsuloti) bo'linadi. Owner tomonidan bir marta to'ldiriladi.
     product_code_map: dict[str, list[str]] = field(default_factory=dict)
+    ombor_api_token: str | None = None  # Ombor token auth (ixtiyoriy; docs/auth.md - inventory)
 
 
 def load_config() -> Config:
@@ -48,4 +49,5 @@ def load_config() -> Config:
         ombor_actor_name=os.getenv("OMBOR_ACTOR_NAME", "sales-sync"),
         state_database_path=os.getenv("STATE_DATABASE_PATH", "sales_sync_state.db"),
         product_code_map=product_code_map,
+        ombor_api_token=os.getenv("OMBOR_API_TOKEN", "").strip() or None,
     )

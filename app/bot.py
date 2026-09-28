@@ -48,13 +48,26 @@ def build_dispatcher(
     return dp
 
 
+def build_ombor_client(config: Config) -> OmborBridgeClient:
+    return OmborBridgeClient(
+        ModuleClient(
+            config.ombor_api_base_url,
+            actor_name=config.ombor_actor_name,
+            api_token=config.ombor_api_token,
+        )
+    )
+
+
 async def main() -> None:
     config = load_config()
     state = StateStore(config.state_database_path)
     analytics = PostgresAnalyticsReader(config.analytics_database_url)
-    ombor = OmborBridgeClient(
-        ModuleClient(config.ombor_api_base_url, actor_name=config.ombor_actor_name)
-    )
+    ombor = build_ombor_client(config)
+    if config.ombor_api_token is None:
+        logger.warning(
+            "OMBOR_API_TOKEN sozlanmagan - Ombor'ga tokensiz (eski header) kiriladi; "
+            "Ombor enforce rejimiga o'tganda rad etiladi."
+        )
 
     bot = Bot(token=config.sales_bot_token)
     dp = build_dispatcher(config, analytics, ombor, state)
