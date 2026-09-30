@@ -121,8 +121,39 @@ async def process_reaction(
     try:
         await ombor.push_sales_shipment(payload)
         state.mark_synced(sync_key)
-        return ReactionResult(outcome="synced")
+        return ReactionResult(outcome="synced", order_id=order.order_id)
     except BridgeError as e:
         logger.warning("Order %s push failed: %s", order.order_id, e)
         state.mark_failed(sync_key, reason=str(e))
-        return ReactionResult(outcome="failed", reason=str(e))
+        return ReactionResult(outcome="failed", reason=str(e), order_id=order.order_id)
+
+
+async def send_alert(ombor: OmborBridgeClient, key: str, level: str, message: str) -> bool:
+    """Ombor /system-alerts -> OWNER'ga Telegram (takrorni Ombor to'xtatadi).
+    Yuborib bo'lmasa - faqat log."""
+    if not ombor.is_configured:
+        return False
+    try:
+        await ombor._client.post("/system-alerts", json={
+            "source": "sales-sync", "key": key, "level": level, "message": message[:1900],
+        })
+        return True
+    except Exception:  # noqa: BLE001
+        logger.warning("Ogohlantirishni Ombor'ga yuborib bo'lmadi (%s)", key, exc_info=True)
+        return False
+
+
+async def alert_for_result(ombor: OmborBridgeClient, chat_id: int, message_id: int, result: ReactionResult) -> None:
+    """Yozilmagan sotuv - ⚠️; keyin muvaffaqiyatli yozilsa - ✅ (Ombor faqat
+    oldin muammo yuborilgan bo'lsa jo'natadi)."""
+    if result.order_id is None or result.outcome not in ("failed", "synced"):
+        return
+    key = f"sales-sync:order:{result.order_id}"
+    link = message_link(chat_id, message_id) or f"xabar ID {message_id}"
+    if result.outcome == "failed":
+        await send_alert(ombor, key, "warning",
+                         f"Buyurtma #{result.order_id} Ombor'ga yozilmadi (tayyor mahsulot kamaytirilmadi).\n"
+                         f"Sabab: {(result.reason or '')[:600]}\nXabar: {link}\n"
+                         "Tuzatilgach - xabardagi reaksiyani olib, qayta qo'ying.")
+    else:
+        await send_alert(ombor, key, "recovered", f"Buyurtma #{result.order_id} endi Ombor'ga yozildi.")
