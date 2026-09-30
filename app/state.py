@@ -59,6 +59,13 @@ class StateStore:
         # (lekin kerak bo'lsa qayta ishlash mumkin, chetlab o'tishga majburlamaydi).
         self._upsert(sync_key, status="NOT_AN_ORDER", reason=None)
 
+    def get_status(self, sync_key: str) -> tuple[str, str | None] | None:
+        """(status, reason) yoki None - bu xabar hali ko'rilmagan bo'lsa."""
+        row = self._conn.execute(
+            "SELECT status, reason FROM processed_reactions WHERE sync_key = ?", (sync_key,)
+        ).fetchone()
+        return (row["status"], row["reason"]) if row else None
+
     def list_needs_review(self) -> list[ReviewItem]:
         rows = self._conn.execute(
             "SELECT sync_key, reason, processed_at FROM processed_reactions "
