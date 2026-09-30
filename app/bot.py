@@ -14,7 +14,7 @@ from erp_bridge_kit import ModuleClient, OmborBridgeClient
 from app.analytics_reader import PostgresAnalyticsReader
 from app.config import Config, load_config
 from app.state import StateStore
-from app.sync_logic import process_reaction
+from app.sync_logic import build_review_message, process_reaction
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ def build_dispatcher(
     dp = Dispatcher()
 
     @dp.message_reaction()
-    async def on_reaction(event: MessageReactionUpdated) -> None:
+    async def on_reaction(event: MessageReactionUpdated, bot: Bot) -> None:
         if event.chat.id != config.sales_group_chat_id:
             return
         if not event.new_reaction:
@@ -44,8 +44,31 @@ def build_dispatcher(
             "Reaction on %s:%s -> %s (%s)",
             event.chat.id, event.message_id, result.outcome, result.reason,
         )
+        if result.outcome == "needs_review" and result.notify:
+            await notify_review(bot, config, event.chat.id, event.message_id, result)
 
     return dp
+
+
+async def notify_review(bot, config: Config, chat_id: int, message_id: int, result) -> int:
+    """'Ko'rib chiqish kerak' buyurtma haqida OWNER'larga xabar. Yuborib
+    bo'lmasa (masalan OWNER botga /start bosmagan) - log, sinxronizatsiya
+    to'xtamaydi. Qaytaradi: yetkazilgan xabarlar soni."""
+    if not config.review_notify_chat_ids:
+        logger.warning(
+            "needs_review %s:%s - REVIEW_NOTIFY_CHAT_IDS sozlanmagan, OWNER'ga xabar yuborilmadi",
+            chat_id, message_id,
+        )
+        return 0
+    text = build_review_message(chat_id, message_id, result)
+    delivered = 0
+    for target in config.review_notify_chat_ids:
+        try:
+            await bot.send_message(target, text, disable_web_page_preview=True)
+            delivered += 1
+        except Exception:  # noqa: BLE001
+            logger.exception("needs_review xabarini %s ga yuborib bo'lmadi (botga /start bosilganmi?)", target)
+    return delivered
 
 
 def build_ombor_client(config: Config) -> OmborBridgeClient:
@@ -72,6 +95,8 @@ async def main() -> None:
     bot = Bot(token=config.sales_bot_token)
     dp = build_dispatcher(config, analytics, ombor, state)
 
+    if not config.review_notify_chat_ids:
+        logger.warning("REVIEW_NOTIFY_CHAT_IDS sozlanmagan - 'ko'rib chiqish kerak' buyurtmalar faqat logda qoladi")
     logger.info("sales-sync boshlandi (guruh=%s)", config.sales_group_chat_id)
     try:
         await dp.start_polling(bot, allowed_updates=["message_reaction"])

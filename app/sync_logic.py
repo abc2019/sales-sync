@@ -14,10 +14,48 @@ logger = logging.getLogger(__name__)
 class ReactionResult:
     outcome: str  # "not_an_order" | "already_synced" | "needs_review" | "synced" | "failed" | "ombor_not_configured"
     reason: str | None = None
+    order_id: int | None = None
+    # needs_review birinchi marta (yoki sababi o'zgarib) aniqlandi - OWNER'ga
+    # xabar yuborish kerak. Qayta reaksiyada bir xil sabab bilan - takror yo'q.
+    notify: bool = False
 
 
 def _sync_key(chat_id: int, message_id: int) -> str:
     return f"{chat_id}:{message_id}"
+
+
+def _needs_review(state: StateStore, sync_key: str, reason: str, order_id: int | None) -> "ReactionResult":
+    previous = state.get_status(sync_key)
+    state.mark_needs_review(sync_key, reason=reason)
+    return ReactionResult(
+        outcome="needs_review", reason=reason, order_id=order_id,
+        notify=previous != ("NEEDS_REVIEW", reason),
+    )
+
+
+def message_link(chat_id: int, message_id: int) -> str | None:
+    """Supergroup xabariga havola (t.me/c/...). Oddiy guruhda - None."""
+    raw = str(chat_id)
+    if raw.startswith("-100"):
+        return f"https://t.me/c/{raw[4:]}/{message_id}"
+    return None
+
+
+def build_review_message(chat_id: int, message_id: int, result: "ReactionResult") -> str:
+    lines = [
+        "⚠️ Buyurtma Ombor'ga yozilmadi - ko'rib chiqish kerak",
+        f"Sabab: {result.reason}",
+    ]
+    if result.order_id is not None:
+        lines.append(f"Buyurtma: #{result.order_id}")
+    link = message_link(chat_id, message_id)
+    lines.append(f"Xabar: {link}" if link else f"Xabar ID: {message_id}")
+    lines += [
+        "",
+        "Tuzatilgach (masalan PRODUCT_CODE_MAP'ga taom qo'shilgach) - xabardagi "
+        "reaksiyani olib, qayta qo'ying: buyurtma qayta yuboriladi.",
+    ]
+    return "\n".join(lines)
 
 
 async def process_reaction(
@@ -48,8 +86,7 @@ async def process_reaction(
         return ReactionResult(outcome="not_an_order")
 
     if not order.items:
-        state.mark_needs_review(sync_key, reason="Buyurtmada hech qanday tovar qatori yo'q")
-        return ReactionResult(outcome="needs_review", reason="Bo'sh buyurtma")
+        return _needs_review(state, sync_key, "Buyurtmada hech qanday tovar qatori yo'q", order.order_id)
 
     resolved_items = []
     unresolved_codes = []
@@ -73,8 +110,7 @@ async def process_reaction(
 
     if unresolved_codes:
         reason = f"PRODUCT_CODE_MAP'da yo'q: {', '.join(sorted(set(unresolved_codes)))}"
-        state.mark_needs_review(sync_key, reason=reason)
-        return ReactionResult(outcome="needs_review", reason=reason)
+        return _needs_review(state, sync_key, reason, order.order_id)
 
     payload = {
         "source_id": build_source_id("analytics-order", str(order.order_id)),

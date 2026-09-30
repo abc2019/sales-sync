@@ -18,6 +18,23 @@ class Config:
     # (Ombor mahsuloti) bo'linadi. Owner tomonidan bir marta to'ldiriladi.
     product_code_map: dict[str, list[str]] = field(default_factory=dict)
     ombor_api_token: str | None = None  # Ombor token auth (ixtiyoriy; docs/auth.md - inventory)
+    # "Ko'rib chiqish kerak" buyurtmalar haqida xabar oladigan Telegram chat ID'lar
+    # (OWNER). Har biri sales-sync botiga bir marta /start bosgan bo'lishi kerak.
+    review_notify_chat_ids: tuple[int, ...] = ()
+
+
+def parse_chat_ids(raw: str) -> tuple[int, ...]:
+    """'111, 222' -> (111, 222). Noto'g'ri qiymat - aniq xato (jim e'tiborsiz emas)."""
+    ids = []
+    for part in raw.replace(";", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            ids.append(int(part))
+        except ValueError:
+            raise RuntimeError(f"REVIEW_NOTIFY_CHAT_IDS noto'g'ri: {part!r} son emas")
+    return tuple(ids)
 
 
 def load_config() -> Config:
@@ -50,4 +67,5 @@ def load_config() -> Config:
         state_database_path=os.getenv("STATE_DATABASE_PATH", "sales_sync_state.db"),
         product_code_map=product_code_map,
         ombor_api_token=os.getenv("OMBOR_API_TOKEN", "").strip() or None,
+        review_notify_chat_ids=parse_chat_ids(os.getenv("REVIEW_NOTIFY_CHAT_IDS", "")),
     )
