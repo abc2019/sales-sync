@@ -80,3 +80,17 @@ review'ga tushadi, bo'sh buyurtma review'ga tushadi, Ombor xatosidan
 keyin qayta tiklanish, takroriy qayta ishlanmaslik, Ombor sozlanmaganda
 xavfsiz to'xtash, bir nechta buyurtma mustaqil ishlanishi), holat bazasi.
 Barchasi soxta (fake) Analytics reader bilan, tarmoqqa chiqmasdan.
+
+## Avtomatik qayta urinish
+
+Ombor'ga yozilmagan buyurtmalar (`FAILED` — Ombor ishlamadi/tarmoq;
+`NEEDS_REVIEW` — masalan Ombor'da bog'lanmagan kod) har
+`SALES_RETRY_INTERVAL_MINUTES` (standart **10**, `0` — o'chiq) daqiqada **o'zi**
+qayta tekshiriladi — reaksiyani qayta qo'yish shart emas. Ombor tiklansa yoki
+owner kodni Ombor botida bog'lasa (🔗 Mahsulot kodlari) — buyurtma o'zi yoziladi
+va OWNER'ga ✅ keladi.
+
+- Birinchi ko'rilganidan `SALES_RETRY_MAX_AGE_DAYS` (standart **7**) kun o'tgan buyurtmalar endi urinilmaydi.
+- Bir aylanishda ko'pi bilan 50 ta.
+- Takror yozuv yo'q (Ombor `source_id` idempotent); sabab o'zgarmasa — takroriy xabar yo'q.
+- Holat fayli Volume'da bo'lishi kerak (`STATE_DATABASE_PATH`) — aks holda deploy'da ro'yxat yo'qoladi.
