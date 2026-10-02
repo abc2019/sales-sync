@@ -13,6 +13,7 @@ from erp_bridge_kit import ModuleClient, OmborBridgeClient
 
 from app.analytics_reader import PostgresAnalyticsReader
 from app.config import Config, load_config
+from app.retry import run_retry_loop
 from app.state import StateStore
 from app.sync_logic import alert_for_result, build_review_message, process_reaction
 
@@ -104,9 +105,15 @@ async def main() -> None:
             "Uni bir marta Ombor botiga yuboring (⚙️ Sozlamalar → 🔗 Mahsulot kodlari) va o'zgaruvchini o'chiring."
         )
     logger.info("sales-sync boshlandi (guruh=%s)", config.sales_group_chat_id)
+
+    async def notify(chat_id, message_id, result):
+        await notify_review(bot, config, chat_id, message_id, result)
+
+    retry_task = asyncio.create_task(run_retry_loop(config, analytics, ombor, state, notify))
     try:
         await dp.start_polling(bot, allowed_updates=["message_reaction"])
     finally:
+        retry_task.cancel()
         state.close()
 
 

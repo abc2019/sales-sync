@@ -22,6 +22,9 @@ class Config:
     # "Ko'rib chiqish kerak" buyurtmalar haqida xabar oladigan Telegram chat ID'lar
     # (OWNER). Har biri sales-sync botiga bir marta /start bosgan bo'lishi kerak.
     review_notify_chat_ids: tuple[int, ...] = ()
+    # Avtomatik qayta urinish (app/retry.py): 0 - o'chiq
+    retry_interval_minutes: int = 10
+    retry_max_age_days: int = 7
 
 
 def parse_chat_ids(raw: str) -> tuple[int, ...]:
@@ -36,6 +39,19 @@ def parse_chat_ids(raw: str) -> tuple[int, ...]:
         except ValueError:
             raise RuntimeError(f"REVIEW_NOTIFY_CHAT_IDS noto'g'ri: {part!r} son emas")
     return tuple(ids)
+
+
+def _int_env(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise RuntimeError(f"{name} butun son bo'lishi kerak: {raw!r}")
+    if value < 0:
+        raise RuntimeError(f"{name} manfiy bo'lishi mumkin emas")
+    return value
 
 
 def load_config() -> Config:
@@ -69,4 +85,6 @@ def load_config() -> Config:
         product_code_map=product_code_map,
         ombor_api_token=os.getenv("OMBOR_API_TOKEN", "").strip() or None,
         review_notify_chat_ids=parse_chat_ids(os.getenv("REVIEW_NOTIFY_CHAT_IDS", "")),
+        retry_interval_minutes=_int_env("SALES_RETRY_INTERVAL_MINUTES", 10),
+        retry_max_age_days=_int_env("SALES_RETRY_MAX_AGE_DAYS", 7),
     )
