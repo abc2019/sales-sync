@@ -86,3 +86,62 @@ def test_parse_chat_ids():
     assert parse_chat_ids(" 111, 222 ;333,") == (111, 222, 333)
     with pytest.raises(RuntimeError):
         parse_chat_ids("111,abc")
+
+
+# --- Yozilmagan sotuv -> Ombor /system-alerts ---
+@pytest.mark.asyncio
+async def test_failed_push_alerts_then_recovered_after_retry(analytics, state_db_path):
+    import json
+
+    import httpx
+    from erp_bridge_kit import ModuleClient, OmborBridgeClient
+
+    from app.sync_logic import alert_for_result
+    alerts, fail = [], {"on": True}
+
+    def handler(request):
+        if request.url.path == "/system-alerts":
+            alerts.append(json.loads(request.content))
+            return httpx.Response(201, json={})
+        if request.url.path == "/sales-shipments/by-code":
+            if fail["on"]:
+                return httpx.Response(400, json={"detail": "Yetarli tayyor mahsulot qoldig'i yo'q"})
+            return httpx.Response(201, json={"id": "s1"})
+        return httpx.Response(404)
+
+    ombor = OmborBridgeClient(ModuleClient("http://ombor.test", transport=httpx.MockTransport(handler)))
+    analytics.add_order(chat_id=-100123, message_id=77, order_id=990, items=[("palov", 2)])
+    state = StateStore(state_db_path)
+    config = _config()
+
+    r1 = await process_reaction(-100123, 77, config, analytics, ombor, state)
+    assert r1.outcome == "failed" and r1.order_id == 990
+    await alert_for_result(ombor, -100123, 77, r1)
+    fail["on"] = False
+    r2 = await process_reaction(-100123, 77, config, analytics, ombor, state)  # reaksiya qayta qo'yildi
+    assert r2.outcome == "synced"
+    await alert_for_result(ombor, -100123, 77, r2)
+    state.close()
+
+    assert [(a["key"], a["level"]) for a in alerts] == [
+        ("sales-sync:order:990", "warning"), ("sales-sync:order:990", "recovered"),
+    ]
+    assert "Yetarli tayyor mahsulot" in alerts[0]["message"]
+    assert "https://t.me/c/123/77" in alerts[0]["message"]
+    assert alerts[0]["source"] == "sales-sync"
+
+
+@pytest.mark.asyncio
+async def test_alert_for_result_ignores_other_outcomes():
+    from app.sync_logic import alert_for_result
+
+    class Never:
+        is_configured = True
+
+        class _client:
+            @staticmethod
+            async def post(*a, **k):
+                raise AssertionError("chaqirilmasligi kerak")
+
+    await alert_for_result(Never(), -100123, 1, ReactionResult(outcome="needs_review", reason="x", order_id=1))
+    await alert_for_result(Never(), -100123, 1, ReactionResult(outcome="not_an_order"))

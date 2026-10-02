@@ -14,7 +14,7 @@ from erp_bridge_kit import ModuleClient, OmborBridgeClient
 from app.analytics_reader import PostgresAnalyticsReader
 from app.config import Config, load_config
 from app.state import StateStore
-from app.sync_logic import build_review_message, process_reaction
+from app.sync_logic import alert_for_result, build_review_message, process_reaction
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,6 +44,7 @@ def build_dispatcher(
             "Reaction on %s:%s -> %s (%s)",
             event.chat.id, event.message_id, result.outcome, result.reason,
         )
+        await alert_for_result(ombor, event.chat.id, event.message_id, result)
         if result.outcome == "needs_review" and result.notify:
             await notify_review(bot, config, event.chat.id, event.message_id, result)
 
