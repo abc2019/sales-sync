@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass
 
+from erp_bridge_kit.ombor import unmapped_codes
 from erp_bridge_kit import BridgeError, OmborBridgeClient, build_source_id
 
 from app.analytics_reader import AnalyticsReader
@@ -18,6 +19,9 @@ class ReactionResult:
     # needs_review birinchi marta (yoki sababi o'zgarib) aniqlandi - OWNER'ga
     # xabar yuborish kerak. Qayta reaksiyada bir xil sabab bilan - takror yo'q.
     notify: bool = False
+
+
+ANALYTICS_SYSTEM = "analytics"  # Ombor /product-mappings/{system}
 
 
 def _sync_key(chat_id: int, message_id: int) -> str:
@@ -52,7 +56,7 @@ def build_review_message(chat_id: int, message_id: int, result: "ReactionResult"
     lines.append(f"Xabar: {link}" if link else f"Xabar ID: {message_id}")
     lines += [
         "",
-        "Tuzatilgach (masalan PRODUCT_CODE_MAP'ga taom qo'shilgach) - xabardagi "
+        "Tuzatish: Ombor botida ⚙️ Sozlamalar → 🔗 Mahsulot kodlari, keyin xabardagi "
         "reaksiyani olib, qayta qo'ying: buyurtma qayta yuboriladi.",
     ]
     return "\n".join(lines)
@@ -88,41 +92,25 @@ async def process_reaction(
     if not order.items:
         return _needs_review(state, sync_key, "Buyurtmada hech qanday tovar qatori yo'q", order.order_id)
 
-    resolved_items = []
-    unresolved_codes = []
-    for item in order.items:
-        ombor_codes = config.product_code_map.get(item.product_code)
-        if not ombor_codes:
-            unresolved_codes.append(item.product_code)
-            continue
-        # Ba'zi taomlar (masalan "Qozon kabob") bitta buyurtma birligi
-        # uchun bir nechta ALOHIDA bankaga (Ombor mahsuloti) bo'linadi —
-        # har biriga BIR XIL miqdor (units_total) yuboriladi, chunki har
-        # bir buyurtma birligi har bir komponentdan bittadan talab qiladi.
-        for ombor_code in ombor_codes:
-            resolved_items.append(
-                {
-                    "finished_product_external_code": ombor_code,
-                    "quantity": str(item.units_total),
-                    "unit": "dona",
-                }
-            )
-
-    if unresolved_codes:
-        reason = f"PRODUCT_CODE_MAP'da yo'q: {', '.join(sorted(set(unresolved_codes)))}"
-        return _needs_review(state, sync_key, reason, order.order_id)
-
-    payload = {
-        "source_id": build_source_id("analytics-order", str(order.order_id)),
-        "order_reference": str(order.order_id),
-        "items": resolved_items,
-    }
-
+    # ERP: mahsulot xaritasi Ombor'da (Ombor #67, /product-mappings). Biz
+    # Analytics kodlarini o'zicha yuboramiz - Ombor ularni mahsulotlarga
+    # aylantiradi (tarkibli taom ham). Bog'lanmagan kod bo'lsa - Ombor 422
+    # qaytaradi va hech narsa yozmaydi -> "ko'rib chiqish kerak".
+    items = [{"code": item.product_code, "quantity": str(item.units_total)} for item in order.items]
     try:
-        await ombor.push_sales_shipment(payload)
+        await ombor.push_sales_shipment_by_mapping(
+            source_id=build_source_id("analytics-order", str(order.order_id)),
+            system=ANALYTICS_SYSTEM,
+            order_reference=str(order.order_id),
+            items=items,
+        )
         state.mark_synced(sync_key)
         return ReactionResult(outcome="synced", order_id=order.order_id)
     except BridgeError as e:
+        missing = unmapped_codes(e)
+        if missing:
+            reason = f"Ombor'da bog'lanmagan kod: {', '.join(missing)}"
+            return _needs_review(state, sync_key, reason, order.order_id)
         logger.warning("Order %s push failed: %s", order.order_id, e)
         state.mark_failed(sync_key, reason=str(e))
         return ReactionResult(outcome="failed", reason=str(e), order_id=order.order_id)
