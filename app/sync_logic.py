@@ -129,18 +129,9 @@ async def process_reaction(
 
 
 async def send_alert(ombor: OmborBridgeClient, key: str, level: str, message: str) -> bool:
-    """Ombor /system-alerts -> OWNER'ga Telegram (takrorni Ombor to'xtatadi).
-    Yuborib bo'lmasa - faqat log."""
-    if not ombor.is_configured:
-        return False
-    try:
-        await ombor._client.post("/system-alerts", json={
-            "source": "sales-sync", "key": key, "level": level, "message": message[:1900],
-        })
-        return True
-    except Exception:  # noqa: BLE001
-        logger.warning("Ogohlantirishni Ombor'ga yuborib bo'lmadi (%s)", key, exc_info=True)
-        return False
+    """erp-bridge-kit'ning umumiy usuli (v0.8.0+): Ombor /system-alerts ->
+    OWNER'ga Telegram; hech qachon istisno ko'tarmaydi."""
+    return await ombor.send_system_alert(source="sales-sync", key=key, level=level, message=message)
 
 
 async def alert_for_result(ombor: OmborBridgeClient, chat_id: int, message_id: int, result: ReactionResult) -> None:

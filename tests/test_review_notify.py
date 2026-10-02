@@ -138,10 +138,8 @@ async def test_alert_for_result_ignores_other_outcomes():
     class Never:
         is_configured = True
 
-        class _client:
-            @staticmethod
-            async def post(*a, **k):
-                raise AssertionError("chaqirilmasligi kerak")
+        async def send_system_alert(self, **kw):
+            raise AssertionError("chaqirilmasligi kerak")
 
     await alert_for_result(Never(), -100123, 1, ReactionResult(outcome="needs_review", reason="x", order_id=1))
     await alert_for_result(Never(), -100123, 1, ReactionResult(outcome="not_an_order"))
