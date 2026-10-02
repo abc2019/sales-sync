@@ -98,6 +98,11 @@ async def main() -> None:
 
     if not config.review_notify_chat_ids:
         logger.warning("REVIEW_NOTIFY_CHAT_IDS sozlanmagan - 'ko'rib chiqish kerak' buyurtmalar faqat logda qoladi")
+    if config.product_code_map:
+        logger.warning(
+            "PRODUCT_CODE_MAP endi ishlatilmaydi: mahsulot xaritasi Ombor'da (ERP ma'lumotnomasi). "
+            "Uni bir marta Ombor botiga yuboring (⚙️ Sozlamalar → 🔗 Mahsulot kodlari) va o'zgaruvchini o'chiring."
+        )
     logger.info("sales-sync boshlandi (guruh=%s)", config.sales_group_chat_id)
     try:
         await dp.start_polling(bot, allowed_updates=["message_reaction"])

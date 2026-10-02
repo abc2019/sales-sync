@@ -16,6 +16,7 @@ class Config:
     # bir nechta kod (list) bo'lishi mumkin — ba'zi taomlar (masalan "Qozon
     # kabob") bitta buyurtma birligi uchun bir nechta ALOHIDA bankaga
     # (Ombor mahsuloti) bo'linadi. Owner tomonidan bir marta to'ldiriladi.
+    # ESKIRGAN: xarita Ombor'da (/product-mappings). Faqat ko'chirish ogohlantirishi uchun o'qiladi.
     product_code_map: dict[str, list[str]] = field(default_factory=dict)
     ombor_api_token: str | None = None  # Ombor token auth (ixtiyoriy; docs/auth.md - inventory)
     # "Ko'rib chiqish kerak" buyurtmalar haqida xabar oladigan Telegram chat ID'lar

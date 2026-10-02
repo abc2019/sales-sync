@@ -24,11 +24,12 @@ Analytics'ning Postgres bazasiga faqat o'qish huquqi bilan ulanadi.
    o'z parser'i uni buyurtma deb tanimagan). Hech narsa qilinmaydi. Bu
    bilan "buyurtmami yoki suhbatmi" ajratish muammosi Analytics'ning
    mavjud parser mantig'iga tayanib, qo'shimcha kodsiz hal bo'ladi.
-4. **Agar topilsa** — Analytics'ning qat'iy mahsulot kodlarini
-   (`palov`, `dimlama` va h.k. — atigi ~17 ta, erkin matn emas)
-   `PRODUCT_CODE_MAP` orqali Ombor'ning `external_code`iga aylantiradi.
-   Xaritada yo'q kod — avtomatik yozilmaydi, mahalliy holatda
-   `NEEDS_REVIEW` sifatida saqlanadi.
+4. **Agar topilsa** — Analytics'ning qat'iy mahsulot kodlari (`palov`,
+   `dimlama` va h.k.) **o'zicha** Ombor'ga yuboriladi
+   (`POST /sales-shipments/by-mapping`, `system=analytics`). Kodlarni
+   mahsulotga **Ombor o'zi** aylantiradi — xarita Ombor'da (ERP mahsulot
+   ma'lumotnomasi, Ombor #67), bu servisda saqlanmaydi. Ombor'da bog'lanmagan
+   kod — hech narsa yozilmaydi, `NEEDS_REVIEW` + OWNER'ga xabar.
 5. Barcha qatorlar mos kelsa → Ombor'ning `POST /sales-shipments/by-code`
    (W5)ga `source_id=analytics-order:{order_id}` bilan yuboriladi
    (idempotent).
@@ -52,9 +53,10 @@ Analytics'ning Postgres bazasiga faqat o'qish huquqi bilan ulanadi.
   GRANT USAGE ON SCHEMA public TO sales_sync_ro;
   GRANT SELECT ON orders, order_items TO sales_sync_ro;
   ```
-- `PRODUCT_CODE_MAP` — Analytics'ning qat'iy mahsulot kodi -> Ombor
-  `external_code` xaritasi (JSON). Ombor'da mavjud bo'lmagan mahsulotlar
-  uchun kod kiritmang — avtomatik review'ga tushadi, xato yozilmaydi.
+- ~~`PRODUCT_CODE_MAP`~~ — **eskirgan**. Xarita endi Ombor'da: Ombor botida
+  ⚙️ Sozlamalar → 🔗 Mahsulot kodlari (yoki `PUT /product-mappings/analytics/{kod}`).
+  Ko'chirish: eski JSON qiymatini o'sha bo'limga bir marta yuboring, keyin
+  o'zgaruvchini o'chiring (qolsa — ishga tushishda ogohlantirish).
 
 ## Ishga tushirish
 

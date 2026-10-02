@@ -103,7 +103,7 @@ async def test_failed_push_alerts_then_recovered_after_retry(analytics, state_db
         if request.url.path == "/system-alerts":
             alerts.append(json.loads(request.content))
             return httpx.Response(201, json={})
-        if request.url.path == "/sales-shipments/by-code":
+        if request.url.path == "/sales-shipments/by-mapping":
             if fail["on"]:
                 return httpx.Response(400, json={"detail": "Yetarli tayyor mahsulot qoldig'i yo'q"})
             return httpx.Response(201, json={"id": "s1"})

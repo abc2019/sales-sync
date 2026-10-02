@@ -25,11 +25,31 @@ def make_ombor(handler):
     return OmborBridgeClient(client)
 
 
-def default_handler_factory(pushed: list):
+# Ombor'dagi xarita (ERP mahsulot ma'lumotnomasi) - soxta Ombor shu bo'yicha
+# by-mapping so'rovini kengaytiradi va eski ko'rinishda (Ombor kodlari) yozadi.
+OMBOR_MAPPING = {
+    "palov": ["PALOV_ANDIJON"],
+    "dimlama": ["DIMLAMA_1KG"],
+    "qozon_kabob": ["QOZON_KABOB_GOSHT", "QOZON_KABOB_FRI"],
+}
+
+
+def default_handler_factory(pushed: list, mapping: dict | None = None):
+    mapping = OMBOR_MAPPING if mapping is None else mapping
+
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/sales-shipments/by-code":
-            import json
-            pushed.append(json.loads(request.content))
+        import json
+        if request.url.path == "/sales-shipments/by-mapping":
+            body = json.loads(request.content)
+            assert body["system"] == "analytics"
+            missing = sorted({i["code"] for i in body["items"] if i["code"] not in mapping})
+            if missing:
+                return httpx.Response(422, json={"detail": {"message": "m", "unmapped_codes": missing}})
+            pushed.append({
+                "source_id": body["source_id"], "order_reference": body["order_reference"],
+                "items": [{"finished_product_external_code": code, "quantity": i["quantity"], "unit": "dona"}
+                          for i in body["items"] for code in mapping[i["code"]]],
+            })
             return httpx.Response(201, json={"id": "shipment-1", "duplicate": False})
         return httpx.Response(404, json={"detail": "not found"})
     return handler
@@ -206,4 +226,40 @@ async def test_second_reaction_on_different_order_processed_independently(analyt
     assert r1.outcome == "synced"
     assert r2.outcome == "synced"
     assert len(pushed) == 2
+    state.close()
+
+
+# --- ERP: xarita Ombor'da (POST /sales-shipments/by-mapping) ---
+@pytest.mark.asyncio
+async def test_sends_analytics_codes_not_ombor_codes(analytics, state_db_path):
+    import json
+    seen = []
+
+    def handler(request):
+        seen.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(201, json={"id": "s", "duplicate": False})
+
+    analytics.add_order(chat_id=-100123, message_id=70, order_id=970, items=[("palov", 2), ("qozon_kabob", 1)])
+    state = StateStore(state_db_path)
+    result = await process_reaction(-100123, 70, make_config(product_code_map={}), analytics,
+                                    make_ombor(handler), state)
+    state.close()
+    assert result.outcome == "synced"
+    path, body = seen[0]
+    assert path == "/sales-shipments/by-mapping"
+    assert body["system"] == "analytics" and body["source_id"] == "analytics-order:970"
+    assert body["items"] == [{"code": "palov", "quantity": "2"}, {"code": "qozon_kabob", "quantity": "1"}]
+
+
+@pytest.mark.asyncio
+async def test_unmapped_in_ombor_becomes_needs_review(analytics, state_db_path):
+    pushed = []
+    analytics.add_order(chat_id=-100123, message_id=71, order_id=971, items=[("palov", 1), ("somsa", 2)])
+    state = StateStore(state_db_path)
+    result = await process_reaction(-100123, 71, make_config(), analytics,
+                                    make_ombor(default_handler_factory(pushed)), state)
+    assert result.outcome == "needs_review" and result.notify is True
+    assert result.reason == "Ombor'da bog'lanmagan kod: somsa"
+    assert pushed == []  # hech narsa yozilmadi
+    assert len(state.list_needs_review()) == 1
     state.close()

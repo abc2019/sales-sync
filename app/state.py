@@ -38,7 +38,7 @@ class StateStore:
 
     def get_synced_keys(self) -> set[str]:
         """Faqat SYNCED chetlab o'tiladi. FAILED/NEEDS_REVIEW qayta uriniladi
-        (owner PRODUCT_CODE_MAP'ni to'ldirsa yoki Ombor tuzalsa, o'zi
+        (owner Ombor'da kodni bog'lasa yoki Ombor tuzalsa, o'zi
         tuzalib ketishi uchun)."""
         rows = self._conn.execute(
             "SELECT sync_key FROM processed_reactions WHERE status = 'SYNCED'"
