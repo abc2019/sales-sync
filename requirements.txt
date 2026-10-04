@@ -1,6 +1,6 @@
 aiogram==3.13.1
 asyncpg>=0.29
-erp-bridge-kit @ git+https://github.com/abc2019/erp-bridge-kit.git@81e5bf2f8182549a03013261c19f1cbf1e0d399f
+erp-bridge-kit @ git+https://github.com/abc2019/erp-bridge-kit.git@1e832b565b1033dc0673dc7dbf17e1ad1d2bd92a
 
 # test/dev
 pytest>=8.0
