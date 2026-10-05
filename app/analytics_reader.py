@@ -27,6 +27,9 @@ class OrderRecord:
     # o'chirilmagan, tasdiq kutmayapti va review_status qabul qilinganlardan biri.
     accepted: bool = True
     review_status: str = "APPROVED"
+    # Bonus tuzatishlar ("+2 non", Analytics order_adjustments LINKED) - jismonan
+    # beriladi, Ombor'dan AYIRILADI (owner qarori 2026-10-05).
+    bonus_items: tuple[OrderItem, ...] = ()
 
 
 class AnalyticsReader(Protocol):
@@ -72,6 +75,10 @@ class PostgresAnalyticsReader:
                 "SELECT product, units_total FROM order_items WHERE order_id = $1",
                 order_row["id"],
             )
+            bonus_rows = await conn.fetch(
+                "SELECT product, quantity FROM order_adjustments WHERE order_id = $1 AND status = 'LINKED'",
+                order_row["id"],
+            )
         finally:
             await conn.close()
 
@@ -84,6 +91,7 @@ class PostgresAnalyticsReader:
                 OrderItem(product_code=r["product"], units_total=r["units_total"])
                 for r in item_rows
             ),
+            bonus_items=tuple(OrderItem(product_code=r["product"], units_total=r["quantity"]) for r in bonus_rows),
         )
 
 
@@ -117,6 +125,8 @@ class ApiAnalyticsReader:
                         for i in data.get("items") or []),
             accepted=bool(data["accepted"]),
             review_status=str(data.get("review_status") or "NONE"),
+            bonus_items=tuple(OrderItem(product_code=b["product"], units_total=int(b["quantity"]))
+                              for b in data.get("bonus_items") or []),
         )
 
 
@@ -127,3 +137,14 @@ def build_reader(config) -> "AnalyticsReader":
     if not config.analytics_database_url:
         raise RuntimeError("ANALYTICS_API_BASE_URL+ANALYTICS_API_TOKEN yoki ANALYTICS_DATABASE_URL kerak")
     return PostgresAnalyticsReader(config.analytics_database_url)
+
+
+def desired_quantities(order: "OrderRecord | None") -> dict[str, int]:
+    """Ombor'dan ayirilishi kerak bo'lgan miqdor (kod -> dona): asosiy qatorlar + bonus.
+    Buyurtma yo'q / o'chirilgan / qabul qilinmagan - {} (hech narsa ayirilmasin)."""
+    if order is None or not order.accepted:
+        return {}
+    out: dict[str, int] = {}
+    for item in tuple(order.items) + tuple(order.bonus_items):
+        out[item.product_code] = out.get(item.product_code, 0) + int(item.units_total)
+    return {k: v for k, v in out.items() if v}

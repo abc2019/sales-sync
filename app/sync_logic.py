@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from erp_bridge_kit.ombor import unmapped_codes
 from erp_bridge_kit import BridgeError, OmborBridgeClient, build_source_id
 
-from app.analytics_reader import AnalyticsReader
+from app.analytics_reader import desired_quantities, AnalyticsReader
 from app.config import Config
 from app.state import StateStore
 
@@ -111,7 +111,9 @@ async def process_reaction(
     # Analytics kodlarini o'zicha yuboramiz - Ombor ularni mahsulotlarga
     # aylantiradi (tarkibli taom ham). Bog'lanmagan kod bo'lsa - Ombor 422
     # qaytaradi va hech narsa yozmaydi -> "ko'rib chiqish kerak".
-    items = [{"code": item.product_code, "quantity": str(item.units_total)} for item in order.items]
+    # Asosiy qatorlar + bonus ("+2 non" - jismonan beriladi, Ombor'dan ayiriladi)
+    quantities = desired_quantities(order)
+    items = [{"code": code, "quantity": str(qty)} for code, qty in sorted(quantities.items())]
     try:
         await ombor.push_sales_shipment_by_mapping(
             source_id=build_source_id("analytics-order", str(order.order_id)),
@@ -120,6 +122,7 @@ async def process_reaction(
             items=items,
         )
         state.mark_synced(sync_key)
+        state.record_pushed(sync_key, order.order_id, quantities)  # C: keyingi o'zgarishlar uchun
         return ReactionResult(outcome="synced", order_id=order.order_id)
     except BridgeError as e:
         missing = unmapped_codes(e)

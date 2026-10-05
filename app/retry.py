@@ -66,6 +66,11 @@ async def run_retry_loop(config, analytics, ombor, state, notify=None, *, sleep=
             if s.checked:
                 logger.info("Qayta urinish: tekshirildi=%d, yozildi=%d, hali muammo=%d",
                             s.checked, s.synced, s.still_failing)
+            # C: yuborilgan buyurtmalar Analytics'da o'zgarganmi - farq Ombor'ga
+            from app.corrections import correct_once
+            c = await correct_once(analytics, ombor, state)
+            if c.corrected or c.failed:
+                logger.info("Tuzatishlar: tekshirildi=%d, tuzatildi=%d, xato=%d", c.checked, c.corrected, c.failed)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 - sikl to'xtamasin
