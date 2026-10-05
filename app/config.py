@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 class Config:
     sales_bot_token: str  # yangi, alohida Telegram bot (faqat reaksiya kuzatish uchun)
     sales_group_chat_id: int  # buyurtma guruhining Telegram chat ID'si
-    analytics_database_url: str  # Analytics Postgres'iga FAQAT O'QISH ulanishi
+    analytics_database_url: str | None  # Analytics Postgres (ESKI yo'l, API bo'lmasa)
     ombor_api_base_url: str | None
     ombor_actor_name: str
     state_database_path: str
@@ -25,6 +25,9 @@ class Config:
     # Avtomatik qayta urinish (app/retry.py): 0 - o'chiq
     retry_interval_minutes: int = 10
     retry_max_age_days: int = 7
+    # ERP kontrakti: Analytics ichki API (Analytics #57). Bo'lsa - baza o'rniga shu.
+    analytics_api_base_url: str | None = None
+    analytics_api_token: str | None = None
 
 
 def parse_chat_ids(raw: str) -> tuple[int, ...]:
@@ -78,7 +81,9 @@ def load_config() -> Config:
     return Config(
         sales_bot_token=os.environ["SALES_BOT_TOKEN"],
         sales_group_chat_id=int(os.environ["SALES_GROUP_CHAT_ID"]),
-        analytics_database_url=os.environ["ANALYTICS_DATABASE_URL"],
+        analytics_database_url=os.getenv("ANALYTICS_DATABASE_URL", "").strip() or None,
+        analytics_api_base_url=os.getenv("ANALYTICS_API_BASE_URL", "").strip() or None,
+        analytics_api_token=os.getenv("ANALYTICS_API_TOKEN", "").strip() or None,
         ombor_api_base_url=os.getenv("OMBOR_API_BASE_URL", "").strip() or None,
         ombor_actor_name=os.getenv("OMBOR_ACTOR_NAME", "sales-sync"),
         state_database_path=os.getenv("STATE_DATABASE_PATH", "sales_sync_state.db"),

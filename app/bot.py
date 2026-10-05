@@ -11,7 +11,7 @@ from aiogram.types import MessageReactionUpdated
 
 from erp_bridge_kit import ModuleClient, OmborBridgeClient
 
-from app.analytics_reader import PostgresAnalyticsReader
+from app.analytics_reader import AnalyticsReader, build_reader
 from app.config import Config, load_config
 from app.retry import run_retry_loop
 from app.state import StateStore
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def build_dispatcher(
-    config: Config, analytics: PostgresAnalyticsReader, ombor: OmborBridgeClient, state: StateStore
+    config: Config, analytics: AnalyticsReader, ombor: OmborBridgeClient, state: StateStore
 ) -> Dispatcher:
     dp = Dispatcher()
 
@@ -86,7 +86,7 @@ def build_ombor_client(config: Config) -> OmborBridgeClient:
 async def main() -> None:
     config = load_config()
     state = StateStore(config.state_database_path)
-    analytics = PostgresAnalyticsReader(config.analytics_database_url)
+    analytics = build_reader(config)  # API (tavsiya) yoki baza (o'tish davri)
     ombor = build_ombor_client(config)
     if config.ombor_api_token is None:
         logger.warning(

@@ -82,7 +82,13 @@ async def process_reaction(
     if not ombor.is_configured:
         return ReactionResult(outcome="ombor_not_configured")
 
-    order = await analytics.fetch_order_by_message(chat_id, message_id)
+    try:
+        order = await analytics.fetch_order_by_message(chat_id, message_id)
+    except Exception as e:  # noqa: BLE001 - Analytics (API/baza) vaqtincha ishlamasa reaksiya yo'qolmasin
+        reason = f"Analytics'dan o'qib bo'lmadi: {type(e).__name__}"
+        logger.warning("Order %s:%s - %s", chat_id, message_id, reason)
+        state.mark_failed(sync_key, reason=reason)  # avtomatik qayta urinish ushlaydi
+        return ReactionResult(outcome="failed", reason=reason)
     if order is None:
         # Bu xabar buyurtma emas (oddiy suhbat) — Analytics'ning o'z parser'i
         # buni "orders"ga yozmagan. Hech narsa qilinmaydi.
