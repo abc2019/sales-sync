@@ -105,3 +105,13 @@ va `review_status ∈ {AUTO_APPROVED, APPROVED, CONFIRMED}`.
   yo'q (bu Analytics ko'rib chiqish navbatining ishi). Analytics'da tasdiqlangach —
   avtomatik qayta urinish (10 daqiqa ichida) o'zi yozadi.
 - O'chirilgan buyurtma — "buyurtma emas".
+
+## Analytics'ga ulanish: ichki API (ERP kontrakti)
+
+`ANALYTICS_API_BASE_URL` va `ANALYTICS_API_TOKEN` berilgan bo'lsa — buyurtma Analytics'ning
+ichki faqat-o'qish API'sidan olinadi (`GET /internal/orders/by-message`, Analytics #57);
+qabul holatini (`accepted`) Analytics o'zi hisoblaydi. Berilmasa — eski yo'l
+(`ANALYTICS_DATABASE_URL`, bazaga to'g'ridan-to'g'ri) — o'tish davri uchun.
+
+Analytics (API yoki baza) vaqtincha ishlamasa — reaksiya **yo'qolmaydi**: `FAILED` bo'lib
+yoziladi va avtomatik qayta urinish (10 daqiqa) Analytics tiklangach o'zi yozadi.

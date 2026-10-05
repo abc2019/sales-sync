@@ -85,3 +85,45 @@ class PostgresAnalyticsReader:
                 for r in item_rows
             ),
         )
+
+
+class ApiAnalyticsReader:
+    """Analytics ichki API orqali (ERP kontrakti, Analytics #57) - bazaga
+    to'g'ridan-to'g'ri ulanmaydi. Qabul holatini Analytics o'zi hisoblaydi."""
+
+    def __init__(self, base_url: str, token: str, transport=None):
+        base = base_url.strip().rstrip("/")
+        self.base_url = base if "://" in base else "https://" + base
+        self.token = token
+        self.transport = transport
+
+    async def fetch_order_by_message(self, chat_id: int, message_id: int) -> OrderRecord | None:
+        import httpx
+        async with httpx.AsyncClient(timeout=15, transport=self.transport) as client:
+            resp = await client.get(
+                f"{self.base_url}/internal/orders/by-message",
+                params={"chat_id": chat_id, "message_id": message_id},
+                headers={"Authorization": f"Bearer {self.token}"},
+            )
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()  # 401/5xx - xato: avtomatik qayta urinish ushlaydi
+        data = resp.json()
+        if data.get("is_deleted"):
+            return None
+        return OrderRecord(
+            order_id=int(data["order_id"]),
+            items=tuple(OrderItem(product_code=i["product"], units_total=int(i["units_total"]))
+                        for i in data.get("items") or []),
+            accepted=bool(data["accepted"]),
+            review_status=str(data.get("review_status") or "NONE"),
+        )
+
+
+def build_reader(config) -> "AnalyticsReader":
+    """API sozlangan bo'lsa - API (tavsiya); aks holda - bazaga to'g'ridan-to'g'ri (o'tish davri)."""
+    if getattr(config, "analytics_api_base_url", None) and getattr(config, "analytics_api_token", None):
+        return ApiAnalyticsReader(config.analytics_api_base_url, config.analytics_api_token)
+    if not config.analytics_database_url:
+        raise RuntimeError("ANALYTICS_API_BASE_URL+ANALYTICS_API_TOKEN yoki ANALYTICS_DATABASE_URL kerak")
+    return PostgresAnalyticsReader(config.analytics_database_url)
