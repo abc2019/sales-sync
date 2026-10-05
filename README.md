@@ -115,3 +115,16 @@ qabul holatini (`accepted`) Analytics o'zi hisoblaydi. Berilmasa — eski yo'l
 
 Analytics (API yoki baza) vaqtincha ishlamasa — reaksiya **yo'qolmaydi**: `FAILED` bo'lib
 yoziladi va avtomatik qayta urinish (10 daqiqa) Analytics tiklangach o'zi yozadi.
+
+## Buyurtma o'zgarsa — Ombor ham tuzatiladi (C)
+
+- Ombor'ga **asosiy qatorlar + bonus** ("+2 non" — Analytics `order_adjustments` LINKED;
+  jismonan beriladi, owner qarori) ayiriladi.
+- Yuborilgan miqdorlar eslab qolinadi (`pushed_orders`). Har qayta urinish aylanishida
+  (10 daqiqa) oxirgi **3 kun**da yuborilgan buyurtmalar Analytics'dan qayta o'qiladi:
+  tarkib o'zgargan, bonus qo'shilgan, o'chirilgan yoki qayta ko'rib chiqishga qaytgan
+  bo'lsa — **farq** Ombor'ga tuzatish bo'lib boradi (`POST /sales-shipments/corrections/by-mapping`:
+  + qo'shimcha chiqim, − qaytish). OWNER'ga: "Ombor tuzatildi: palov −4, non +2".
+- Tuzatish yozilmasa (masalan bog'lanmagan kod) — ⚠️ va keyingi aylanishda qayta urinish.
+- Analytics vaqtincha ishlamasa — hech narsa qaytarilmaydi (taxmin yo'q), keyingi aylanishda.
+- Shu versiyadan **oldin** yuborilgan buyurtmalar kuzatilmaydi (miqdorlari saqlanmagan).

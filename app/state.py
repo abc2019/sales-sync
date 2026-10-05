@@ -17,6 +17,14 @@ CREATE TABLE IF NOT EXISTS processed_reactions (
     processed_at TEXT NOT NULL,
     first_seen_at TEXT
 );
+-- Ombor'ga yuborilgan miqdorlar (C: Analytics'da buyurtma o'zgarsa - farq tuzatiladi)
+CREATE TABLE IF NOT EXISTS pushed_orders (
+    sync_key TEXT PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    quantities TEXT NOT NULL,          -- JSON {kod: dona}
+    pushed_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -39,7 +47,7 @@ class StateStore:
     def __init__(self, db_path: str):
         self._conn = sqlite3.connect(db_path)
         self._conn.row_factory = sqlite3.Row
-        self._conn.execute(SCHEMA)
+        self._conn.executescript(SCHEMA)
         # Eski bazalar (first_seen_at'dan oldingi) - ustunni qo'shamiz
         cols = {r["name"] for r in self._conn.execute("PRAGMA table_info(processed_reactions)")}
         if "first_seen_at" not in cols:
@@ -123,3 +131,22 @@ class StateStore:
             (sync_key, status, reason, now, now),
         )
         self._conn.commit()
+
+    # --- C: yuborilgan miqdorlar ---
+    def record_pushed(self, sync_key: str, order_id: int, quantities: dict[str, int]) -> None:
+        import json
+        now = datetime.now(timezone.utc).isoformat()
+        self._conn.execute(
+            "INSERT INTO pushed_orders(sync_key, order_id, quantities, pushed_at, updated_at) VALUES (?,?,?,?,?) "
+            "ON CONFLICT(sync_key) DO UPDATE SET quantities=excluded.quantities, updated_at=excluded.updated_at",
+            (sync_key, int(order_id), json.dumps(quantities, sort_keys=True), now, now))
+        self._conn.commit()
+
+    def list_watched(self, *, max_age_days: int) -> list[tuple[str, int, dict[str, int]]]:
+        """Kuzatiladigan buyurtmalar: oxirgi max_age_days ichida yuborilganlar."""
+        import json
+        since = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+        rows = self._conn.execute(
+            "SELECT sync_key, order_id, quantities FROM pushed_orders WHERE pushed_at >= ? ORDER BY pushed_at",
+            (since,)).fetchall()
+        return [(r[0], int(r[1]), json.loads(r[2])) for r in rows]
