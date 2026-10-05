@@ -23,12 +23,25 @@ class OrderItem:
 class OrderRecord:
     order_id: int
     items: tuple[OrderItem, ...]
+    # Analytics'ning YAGONA qabul qoidasi (analytics/sales.py ACCEPTED_SALES_STATUSES):
+    # o'chirilmagan, tasdiq kutmayapti va review_status qabul qilinganlardan biri.
+    accepted: bool = True
+    review_status: str = "APPROVED"
 
 
 class AnalyticsReader(Protocol):
     async def fetch_order_by_message(
         self, chat_id: int, message_id: int
     ) -> OrderRecord | None: ...
+
+
+# Analytics bilan AYNAN bir xil (shohona-ai-analytics: analytics/sales.py).
+# Ombor'dan faqat Analytics "qabul qilingan sotuv" deb hisoblagan buyurtma ayiriladi.
+ACCEPTED_SALES_STATUSES = frozenset({"AUTO_APPROVED", "APPROVED", "CONFIRMED"})
+
+
+def is_accepted_sale(needs_confirmation, review_status: str | None) -> bool:
+    return (not needs_confirmation) and str(review_status or "").upper() in ACCEPTED_SALES_STATUSES
 
 
 class PostgresAnalyticsReader:
@@ -46,15 +59,13 @@ class PostgresAnalyticsReader:
         try:
             order_row = await conn.fetchrow(
                 """
-                SELECT id FROM orders
+                SELECT id, is_deleted, needs_confirmation, review_status FROM orders
                 WHERE telegram_chat_id = $1 AND telegram_message_id = $2
-                  AND is_deleted = false
-                  AND (needs_confirmation = false OR reviewed_by IS NOT NULL)
                 """,
                 chat_id,
                 message_id,
             )
-            if order_row is None:
+            if order_row is None or order_row["is_deleted"]:
                 return None
 
             item_rows = await conn.fetch(
@@ -64,7 +75,10 @@ class PostgresAnalyticsReader:
         finally:
             await conn.close()
 
+        status = str(order_row["review_status"] or "").upper()
         return OrderRecord(
+            accepted=is_accepted_sale(order_row["needs_confirmation"], status),
+            review_status=status or "NONE",
             order_id=order_row["id"],
             items=tuple(
                 OrderItem(product_code=r["product"], units_total=r["units_total"])

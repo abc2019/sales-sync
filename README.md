@@ -94,3 +94,14 @@ va OWNER'ga ✅ keladi.
 - Bir aylanishda ko'pi bilan 50 ta.
 - Takror yozuv yo'q (Ombor `source_id` idempotent); sabab o'zgarmasa — takroriy xabar yo'q.
 - Holat fayli Volume'da bo'lishi kerak (`STATE_DATABASE_PATH`) — aks holda deploy'da ro'yxat yo'qoladi.
+
+## Qabul qilingan sotuv (Analytics bilan yagona qoida)
+
+Ombor'dan faqat Analytics **qabul qilgan** buyurtma ayiriladi — Analytics'ning o'z
+qoidasi bilan aynan bir xil (`analytics/sales.py`): o'chirilmagan, `needs_confirmation = false`
+va `review_status ∈ {AUTO_APPROVED, APPROVED, CONFIRMED}`.
+
+- Hali qabul qilinmagan (masalan `PENDING`) — Ombor'ga yuborilmaydi, OWNER'ga xabar ham
+  yo'q (bu Analytics ko'rib chiqish navbatining ishi). Analytics'da tasdiqlangach —
+  avtomatik qayta urinish (10 daqiqa ichida) o'zi yozadi.
+- O'chirilgan buyurtma — "buyurtma emas".

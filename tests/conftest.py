@@ -9,10 +9,14 @@ class FakeAnalyticsReader:
     def __init__(self):
         self._orders: dict[tuple[int, int], OrderRecord] = {}
 
-    def add_order(self, *, chat_id: int, message_id: int, order_id: int, items: list[tuple[str, int]]):
+    def add_order(self, *, chat_id: int, message_id: int, order_id: int, items: list[tuple[str, int]],
+                  review_status: str = "APPROVED", needs_confirmation: bool = False):
+        from app.analytics_reader import is_accepted_sale
         self._orders[(chat_id, message_id)] = OrderRecord(
             order_id=order_id,
             items=tuple(OrderItem(product_code=p, units_total=q) for p, q in items),
+            accepted=is_accepted_sale(needs_confirmation, review_status),
+            review_status=review_status,
         )
 
     async def fetch_order_by_message(self, chat_id: int, message_id: int) -> OrderRecord | None:
