@@ -89,6 +89,15 @@ async def process_reaction(
         state.mark_not_an_order(sync_key)
         return ReactionResult(outcome="not_an_order")
 
+    if not order.accepted:
+        # Analytics hali qabul qilmagan (ko'rib chiqishda / rad etilgan). Ombor'ga
+        # yuborilmaydi. Analytics'da tasdiqlangach - avtomatik qayta urinish
+        # (har 10 daqiqa, 7 kungacha) o'zi yozadi. OWNER'ga xabar shart emas -
+        # bu Analytics ko'rib chiqish navbatining ishi.
+        state.mark_needs_review(sync_key, reason=f"Analytics'da hali qabul qilinmagan ({order.review_status})")
+        return ReactionResult(outcome="needs_review", order_id=order.order_id, notify=False,
+                              reason=f"Analytics'da hali qabul qilinmagan ({order.review_status})")
+
     if not order.items:
         return _needs_review(state, sync_key, "Buyurtmada hech qanday tovar qatori yo'q", order.order_id)
 
