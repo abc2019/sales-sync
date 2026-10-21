@@ -1,5 +1,10 @@
 """Avtomatik sotuv: Analytics QABUL QILGAN har buyurtma Ombor'ga - reaksiya kutilmaydi.
 
+Kuniga BIR MARTA, kun oxirida (AUTO_SYNC_TIME, standart 23:50, BUSINESS_TIMEZONE - Asia/Seoul):
+owner (2026-10-21) "har 10 daqiqa shart emas, kun oxirida". Shu kun sotuvi Ombor'ga o'sha kun
+sanasi bilan tushadi. Servis o'sha vaqtda ishlamagan bo'lsa - ishga tushganda o'tkazib yuborilgan
+kun darhol bajariladi.
+
 Owner (2026-10-21): guruhda reaksiya bosilgan buyurtmalar ham Ombor'ga tushmayotgan edi
 (Telegram reaksiya hodisasini botga faqat u guruhda admin bo'lsa va har doim ham yubormaydi).
 "Analytics'dan olsa bo'lmaydimi" - endi har aylanishda Analytics'ning
@@ -90,3 +95,59 @@ async def auto_sync_once(config, analytics, ombor, state, notify=None, *, now: d
         since = newest
     state.set_meta(WATERMARK_KEY, newest.isoformat())
     return summary
+
+
+LAST_RUN_KEY = "auto_sync_last_day"
+
+
+def parse_run_time(raw: str):
+    from datetime import time
+    raw = (raw or "").strip().lower()
+    if raw in ("off", "0", "no", "false"):
+        return None
+    try:
+        hh, mm = (raw or "23:50").split(":")
+        return time(int(hh), int(mm))
+    except (ValueError, TypeError):
+        return time(23, 50)
+
+
+def next_run(now_local: datetime, run_at, last_day: str | None) -> datetime:
+    """Keyingi ishga tushish (mahalliy vaqt). Bugungi vaqt o'tgan va bugun hali bajarilmagan
+    bo'lsa - darhol (o'tkazib yuborilgan kun)."""
+    today_run = now_local.replace(hour=run_at.hour, minute=run_at.minute, second=0, microsecond=0)
+    if now_local >= today_run and last_day != now_local.date().isoformat():
+        return now_local
+    if now_local < today_run:
+        return today_run
+    return today_run + timedelta(days=1)
+
+
+async def run_daily_loop(config, analytics, ombor, state, notify=None, *, sleep=None, clock=None,
+                         max_runs: int | None = None) -> None:
+    import asyncio
+    import os
+    from zoneinfo import ZoneInfo
+    sleep = sleep or asyncio.sleep
+    tz = ZoneInfo(os.getenv("BUSINESS_TIMEZONE", "Asia/Seoul"))
+    run_at = parse_run_time(os.getenv("AUTO_SYNC_TIME", "23:50"))
+    if run_at is None or getattr(config, "auto_sync_lookback_days", 0) <= 0:
+        logger.info("Avtomatik sotuv o'chiq")
+        return
+    runs = 0
+    while max_runs is None or runs < max_runs:
+        now_local = (clock() if clock else datetime.now(timezone.utc)).astimezone(tz)
+        target = next_run(now_local, run_at, state.get_meta(LAST_RUN_KEY))
+        await sleep(max(0.0, (target - now_local).total_seconds()))
+        runs += 1
+        try:
+            a = await auto_sync_once(config, analytics, ombor, state, notify,
+                                     lookback_days=config.auto_sync_lookback_days)
+            state.set_meta(LAST_RUN_KEY, target.date().isoformat())
+            logger.info("Kunlik avtomatik sotuv (%s): ko'rildi=%d, yozildi=%d, muammo=%d",
+                        target.date(), a.seen, a.synced, a.problems)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - keyingi kunda qayta
+            logger.exception("Kunlik avtomatik sotuvda xato")
+            await sleep(600)   # 10 daqiqadan keyin qayta urinish (shu kun hali bajarilmagan)

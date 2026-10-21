@@ -4,6 +4,7 @@ qo'shilganini kuzatadi va app.sync_logic.process_reaction()ni chaqiradi.
 Barcha biznes mantiq sync_logic.py'da, tarmoqsiz test qilinadi.
 """
 import asyncio
+import os
 import logging
 
 from aiogram import Bot, Dispatcher
@@ -105,16 +106,19 @@ async def main() -> None:
             "Uni bir marta Ombor botiga yuboring (⚙️ Sozlamalar → 🔗 Mahsulot kodlari) va o'zgaruvchini o'chiring."
         )
     logger.info("sales-sync boshlandi (guruh=%s; avtomatik sotuv: %s)", config.sales_group_chat_id,
-                f"oxirgi {config.auto_sync_lookback_days} kun" if config.auto_sync_lookback_days > 0 else "o'chiq")
+                f"har kuni {os.getenv('AUTO_SYNC_TIME', '23:50')}" if config.auto_sync_lookback_days > 0 else "o'chiq")
 
     async def notify(chat_id, message_id, result):
         await notify_review(bot, config, chat_id, message_id, result)
 
     retry_task = asyncio.create_task(run_retry_loop(config, analytics, ombor, state, notify))
+    from app.auto_sync import run_daily_loop
+    daily_task = asyncio.create_task(run_daily_loop(config, analytics, ombor, state, notify))
     try:
         await dp.start_polling(bot, allowed_updates=["message_reaction"])
     finally:
         retry_task.cancel()
+        daily_task.cancel()
         state.close()
 
 

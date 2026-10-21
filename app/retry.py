@@ -66,13 +66,6 @@ async def run_retry_loop(config, analytics, ombor, state, notify=None, *, sleep=
             if s.checked:
                 logger.info("Qayta urinish: tekshirildi=%d, yozildi=%d, hali muammo=%d",
                             s.checked, s.synced, s.still_failing)
-            # Avtomatik sotuv: qabul qilingan buyurtmalar reaksiyasiz (owner 2026-10-21)
-            if getattr(config, "auto_sync_lookback_days", 0) > 0:
-                from app.auto_sync import auto_sync_once
-                a = await auto_sync_once(config, analytics, ombor, state, notify,
-                                         lookback_days=config.auto_sync_lookback_days)
-                if a.synced or a.problems:
-                    logger.info("Avtomatik sotuv: ko'rildi=%d, yozildi=%d, muammo=%d", a.seen, a.synced, a.problems)
             # C: yuborilgan buyurtmalar Analytics'da o'zgarganmi - farq Ombor'ga
             from app.corrections import correct_once
             c = await correct_once(analytics, ombor, state)

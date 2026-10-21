@@ -92,3 +92,32 @@ async def test_api_reader_fetch_changes():
     out = await r.fetch_changes(NOW, 50)
     assert seen == {"path": "/internal/orders/changes", "params": {"since": NOW.isoformat(), "limit": "50"},
                     "auth": "Bearer tok"} and out[0]["order_id"] == 1
+
+
+def test_next_run_end_of_day_and_catch_up():
+    from zoneinfo import ZoneInfo
+    from app.auto_sync import next_run, parse_run_time
+    seoul = ZoneInfo("Asia/Seoul")
+    at = parse_run_time("23:50")
+    morning = datetime(2026, 10, 21, 10, 0, tzinfo=seoul)
+    assert next_run(morning, at, "2026-10-20") == datetime(2026, 10, 21, 23, 50, tzinfo=seoul)
+    late = datetime(2026, 10, 21, 23, 55, tzinfo=seoul)
+    assert next_run(late, at, "2026-10-20") == late                    # o'tkazib yuborilgan - darhol
+    assert next_run(late, at, "2026-10-21") == datetime(2026, 10, 22, 23, 50, tzinfo=seoul)
+    assert parse_run_time("off") is None and parse_run_time("bad") == at
+
+
+@pytest.mark.asyncio
+async def test_daily_loop_runs_once_per_day(state_db_path, monkeypatch):
+    from app import auto_sync
+    monkeypatch.setenv("AUTO_SYNC_TIME", "23:50")
+    a = Changes([_order(1601, 21, [("qayla", 4)])])
+    calls, state, slept = [], StateStore(state_db_path), []
+
+    async def fake_sleep(sec):
+        slept.append(sec)
+    clock = lambda: datetime(2026, 10, 21, 14, 50, tzinfo=timezone.utc)   # KST 23:50
+    await auto_sync.run_daily_loop(make_config(), a, ombor_recorder(calls), state, sleep=fake_sleep,
+                                   clock=clock, max_runs=1)
+    assert [b["order_reference"] for k, b in calls if k != "alert"] == ["1601"]
+    assert state.get_meta(auto_sync.LAST_RUN_KEY) == "2026-10-21" and slept == [0.0]

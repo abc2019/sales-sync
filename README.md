@@ -14,7 +14,7 @@ Analytics'ning Postgres bazasiga faqat o'qish huquqi bilan ulanadi.
 
 ## Avtomatik sotuv (2026-10-21)
 
-Analytics **qabul qilgan** har buyurtma reaksiya kutilmasdan Ombor'ga yoziladi (`app/auto_sync.py`): har `SALES_RETRY_INTERVAL_MINUTES` (10) daqiqada Analytics'dan yangi/o'zgargan buyurtmalar o'qiladi (`/internal/orders/changes` yoki baza). Faqat oxirgi `AUTO_SYNC_LOOKBACK_DAYS` (3; 0 - o'chiq) kunda yaratilganlar. Reaksiya yo'li ham ishlayveradi - takror yozuv yo'q (`source_id=analytics-order:{id}`).
+Analytics **qabul qilgan** har buyurtma reaksiya kutilmasdan Ombor'ga yoziladi (`app/auto_sync.py`): **kuniga bir marta, kun oxirida** (`AUTO_SYNC_TIME`, standart `23:50`, Koreya vaqti; `off` - o'chiq) Analytics'dan yangi/o'zgargan buyurtmalar o'qiladi; servis o'sha paytda ishlamagan bo'lsa - ishga tushganda darhol (`/internal/orders/changes` yoki baza). Faqat oxirgi `AUTO_SYNC_LOOKBACK_DAYS` (3; 0 - o'chiq) kunda yaratilganlar. Reaksiya yo'li ham ishlayveradi - takror yozuv yo'q (`source_id=analytics-order:{id}`).
 
 ## Qanday ishlaydi
 
