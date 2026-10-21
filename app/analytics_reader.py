@@ -95,6 +95,40 @@ class PostgresAnalyticsReader:
         )
 
 
+    async def fetch_changes(self, since, limit: int = 200) -> list[dict]:
+        """Avtomatik sotuv uchun (API bo'lmasa - bazadan; Analytics /internal/orders/changes bilan bir xil shakl)."""
+        import asyncpg
+        conn = await asyncpg.connect(self.database_url)
+        try:
+            rows = await conn.fetch(
+                """
+                SELECT * FROM (
+                  SELECT o.id, o.telegram_chat_id, o.telegram_message_id, o.review_status,
+                         o.needs_confirmation, o.is_deleted, o.created_at,
+                         GREATEST(o.created_at, COALESCE(o.reviewed_at, o.created_at),
+                                  COALESCE(o.edited_at, o.created_at), COALESCE(o.deleted_at, o.created_at)) AS changed_at
+                  FROM orders o) t
+                WHERE t.changed_at > $1 ORDER BY t.changed_at, t.id LIMIT $2
+                """, since.replace(tzinfo=None) if since.tzinfo else since, limit)
+            out = []
+            for r in rows:
+                items = await conn.fetch("SELECT product, units_total FROM order_items WHERE order_id = $1", r["id"])
+                bonus = await conn.fetch("SELECT product, quantity FROM order_adjustments "
+                                         "WHERE order_id = $1 AND status = 'LINKED'", r["id"])
+                status = str(r["review_status"] or "").upper()
+                out.append({
+                    "order_id": r["id"], "chat_id": r["telegram_chat_id"], "message_id": r["telegram_message_id"],
+                    "accepted": (not r["is_deleted"]) and is_accepted_sale(r["needs_confirmation"], status),
+                    "is_deleted": bool(r["is_deleted"]), "review_status": status or "NONE",
+                    "created_at": r["created_at"].isoformat(), "changed_at": r["changed_at"].isoformat(),
+                    "items": [{"product": i["product"], "units_total": int(i["units_total"])} for i in items],
+                    "bonus_items": [{"product": b["product"], "quantity": int(b["quantity"])} for b in bonus],
+                })
+            return out
+        finally:
+            await conn.close()
+
+
 class ApiAnalyticsReader:
     """Analytics ichki API orqali (ERP kontrakti, Analytics #57) - bazaga
     to'g'ridan-to'g'ri ulanmaydi. Qabul holatini Analytics o'zi hisoblaydi."""
@@ -128,6 +162,19 @@ class ApiAnalyticsReader:
             bonus_items=tuple(OrderItem(product_code=b["product"], units_total=int(b["quantity"]))
                               for b in data.get("bonus_items") or []),
         )
+
+
+    async def fetch_changes(self, since, limit: int = 200) -> list[dict]:
+        """Avtomatik sotuv (app/auto_sync.py): since dan keyin yaratilgan/o'zgargan buyurtmalar."""
+        import httpx
+        async with httpx.AsyncClient(timeout=30, transport=self.transport) as client:
+            resp = await client.get(
+                f"{self.base_url}/internal/orders/changes",
+                params={"since": since.isoformat(), "limit": limit},
+                headers={"Authorization": f"Bearer {self.token}"},
+            )
+        resp.raise_for_status()
+        return resp.json()
 
 
 def build_reader(config) -> "AnalyticsReader":

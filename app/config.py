@@ -28,6 +28,8 @@ class Config:
     # ERP kontrakti: Analytics ichki API (Analytics #57). Bo'lsa - baza o'rniga shu.
     analytics_api_base_url: str | None = None
     analytics_api_token: str | None = None
+    # Avtomatik sotuv (app/auto_sync.py): qabul qilingan buyurtma reaksiyasiz Ombor'ga. 0 - o'chiq.
+    auto_sync_lookback_days: int = 3
 
 
 def parse_chat_ids(raw: str) -> tuple[int, ...]:
@@ -90,6 +92,7 @@ def load_config() -> Config:
         product_code_map=product_code_map,
         ombor_api_token=os.getenv("OMBOR_API_TOKEN", "").strip() or None,
         review_notify_chat_ids=parse_chat_ids(os.getenv("REVIEW_NOTIFY_CHAT_IDS", "")),
+        auto_sync_lookback_days=_int_env("AUTO_SYNC_LOOKBACK_DAYS", 3),
         retry_interval_minutes=_int_env("SALES_RETRY_INTERVAL_MINUTES", 10),
         retry_max_age_days=_int_env("SALES_RETRY_MAX_AGE_DAYS", 7),
     )
