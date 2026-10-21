@@ -95,6 +95,15 @@ async def process_reaction(
         state.mark_not_an_order(sync_key)
         return ReactionResult(outcome="not_an_order")
 
+    return await process_order(chat_id, message_id, order, ombor, state)
+
+
+async def process_order(chat_id: int, message_id: int, order, ombor: OmborBridgeClient,
+                        state: StateStore) -> ReactionResult:
+    """Topilgan buyurtmani Ombor'ga yozish (reaksiya yoki avtomatik sinxronizatsiya - app/auto_sync.py)."""
+    sync_key = _sync_key(chat_id, message_id)
+    if not ombor.is_configured:
+        return ReactionResult(outcome="ombor_not_configured")
     if not order.accepted:
         # Analytics hali qabul qilmagan (ko'rib chiqishda / rad etilgan). Ombor'ga
         # yuborilmaydi. Analytics'da tasdiqlangach - avtomatik qayta urinish

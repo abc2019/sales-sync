@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS pushed_orders (
     pushed_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 
@@ -130,6 +134,15 @@ class StateStore:
             """,
             (sync_key, status, reason, now, now),
         )
+        self._conn.commit()
+
+    def get_meta(self, key: str) -> str | None:
+        row = self._conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set_meta(self, key: str, value: str) -> None:
+        self._conn.execute("INSERT INTO meta(key, value) VALUES (?, ?) "
+                           "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
         self._conn.commit()
 
     # --- C: yuborilgan miqdorlar ---

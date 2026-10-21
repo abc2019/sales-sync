@@ -12,6 +12,10 @@ To'liq kontekst: `abc2019/inventory` repo'sidagi
 o'zining alohida Telegram bot tokeni bilan guruhga a'zo bo'ladi va
 Analytics'ning Postgres bazasiga faqat o'qish huquqi bilan ulanadi.
 
+## Avtomatik sotuv (2026-10-21)
+
+Analytics **qabul qilgan** har buyurtma reaksiya kutilmasdan Ombor'ga yoziladi (`app/auto_sync.py`): har `SALES_RETRY_INTERVAL_MINUTES` (10) daqiqada Analytics'dan yangi/o'zgargan buyurtmalar o'qiladi (`/internal/orders/changes` yoki baza). Faqat oxirgi `AUTO_SYNC_LOOKBACK_DAYS` (3; 0 - o'chiq) kunda yaratilganlar. Reaksiya yo'li ham ishlayveradi - takror yozuv yo'q (`source_id=analytics-order:{id}`).
+
 ## Qanday ishlaydi
 
 1. `app/bot.py` — alohida, yangi Telegram bot orqali buyurtma guruhidagi

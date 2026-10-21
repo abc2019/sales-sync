@@ -104,7 +104,8 @@ async def main() -> None:
             "PRODUCT_CODE_MAP endi ishlatilmaydi: mahsulot xaritasi Ombor'da (ERP ma'lumotnomasi). "
             "Uni bir marta Ombor botiga yuboring (⚙️ Sozlamalar → 🔗 Mahsulot kodlari) va o'zgaruvchini o'chiring."
         )
-    logger.info("sales-sync boshlandi (guruh=%s)", config.sales_group_chat_id)
+    logger.info("sales-sync boshlandi (guruh=%s; avtomatik sotuv: %s)", config.sales_group_chat_id,
+                f"oxirgi {config.auto_sync_lookback_days} kun" if config.auto_sync_lookback_days > 0 else "o'chiq")
 
     async def notify(chat_id, message_id, result):
         await notify_review(bot, config, chat_id, message_id, result)
