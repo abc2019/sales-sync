@@ -134,3 +134,20 @@ async def test_analytics_outage_skips_safely(state_db_path):
     s = await correct_once(Down(), ombor_recorder(calls), state)
     assert s.failed == 1 and calls == []  # hech narsa qaytarilmaydi (taxmin yo'q)
     state.close()
+
+
+@pytest.mark.asyncio
+async def test_correction_carries_ordered_at(state_db_path):
+    from dataclasses import replace
+    a, calls = Analytics(), []
+    ombor = ombor_recorder(calls)
+    a.set(88, 995, [("palov", 10)])
+    a.orders[88] = replace(a.orders[88], created_at="2026-10-24T05:00:00+00:00")
+    state = StateStore(state_db_path)
+    await process_reaction(CHAT, 88, make_config(), a, ombor, state)
+    a.set(88, 995, [("palov", 6)])
+    a.orders[88] = replace(a.orders[88], created_at="2026-10-24T05:00:00+00:00")
+    await correct_once(a, ombor, state)
+    bodies = [b for k, b in calls if k != "alert"]
+    assert [b.get("ordered_at") for b in bodies] == ["2026-10-24T05:00:00+00:00"] * 2
+    state.close()

@@ -20,7 +20,7 @@ from erp_bridge_kit import BridgeError
 from erp_bridge_kit.ombor import unmapped_codes
 
 from app.analytics_reader import desired_quantities
-from app.sync_logic import ANALYTICS_SYSTEM, send_alert
+from app.sync_logic import ANALYTICS_SYSTEM, push_sales, send_alert
 
 logger = logging.getLogger(__name__)
 WATCH_DAYS = 3
@@ -65,11 +65,11 @@ async def correct_once(analytics, ombor, state, *, watch_days: int = WATCH_DAYS)
             continue
         what = "bekor qilindi" if not desired else "o'zgardi"
         try:
-            await ombor.push_sales_correction_by_mapping(
-                source_id=f"analytics-order:{order_id}:rev:{target_fingerprint(desired)}",
-                system=ANALYTICS_SYSTEM, order_reference=str(order_id),
-                items=[{"code": c, "quantity": str(q)} for c, q in delta.items()],
-            )
+            await push_sales(ombor, "/sales-shipments/corrections/by-mapping",
+                             source_id=f"analytics-order:{order_id}:rev:{target_fingerprint(desired)}",
+                             order_reference=str(order_id),
+                             items=[{"code": c, "quantity": str(q)} for c, q in delta.items()],
+                             ordered_at=getattr(order, "created_at", None) if order is not None else None)
         except BridgeError as e:
             summary.failed += 1
             missing = unmapped_codes(e)
