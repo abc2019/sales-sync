@@ -121,3 +121,14 @@ async def test_daily_loop_runs_once_per_day(state_db_path, monkeypatch):
                                    clock=clock, max_runs=1)
     assert [b["order_reference"] for k, b in calls if k != "alert"] == ["1601"]
     assert state.get_meta(auto_sync.LAST_RUN_KEY) == "2026-10-21" and slept == [0.0]
+
+
+@pytest.mark.asyncio
+async def test_ordered_at_sent_to_ombor(state_db_path):
+    """Ombor sanoqdan oldingi buyurtmani qayta ayirmasligi uchun buyurtma vaqti yuboriladi (2026-10-24)."""
+    created = NOW - timedelta(hours=5)
+    a = Changes([_order(1701, 31, [("qayla", 4)], created=created)])
+    calls, state = [], StateStore(state_db_path)
+    await auto_sync_once(make_config(), a, ombor_recorder(calls), state, now=NOW)
+    body = next(b for k, b in calls if k != "alert")
+    assert body["ordered_at"] == created.isoformat() and body["system"] == "analytics"

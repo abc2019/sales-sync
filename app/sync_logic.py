@@ -124,12 +124,10 @@ async def process_order(chat_id: int, message_id: int, order, ombor: OmborBridge
     quantities = desired_quantities(order)
     items = [{"code": code, "quantity": str(qty)} for code, qty in sorted(quantities.items())]
     try:
-        await ombor.push_sales_shipment_by_mapping(
-            source_id=build_source_id("analytics-order", str(order.order_id)),
-            system=ANALYTICS_SYSTEM,
-            order_reference=str(order.order_id),
-            items=items,
-        )
+        await push_sales(ombor, "/sales-shipments/by-mapping",
+                         source_id=build_source_id("analytics-order", str(order.order_id)),
+                         order_reference=str(order.order_id), items=items,
+                         ordered_at=getattr(order, "created_at", None))
         state.mark_synced(sync_key)
         state.record_pushed(sync_key, order.order_id, quantities)  # C: keyingi o'zgarishlar uchun
         return ReactionResult(outcome="synced", order_id=order.order_id)
@@ -141,6 +139,18 @@ async def process_order(chat_id: int, message_id: int, order, ombor: OmborBridge
         logger.warning("Order %s push failed: %s", order.order_id, e)
         state.mark_failed(sync_key, reason=str(e))
         return ReactionResult(outcome="failed", reason=str(e), order_id=order.order_id)
+
+
+async def push_sales(ombor: OmborBridgeClient, path: str, *, source_id: str, order_reference: str,
+                     items: list[dict], ordered_at: str | None) -> dict:
+    """Sotuv/tuzatish Ombor'ga (bridge-kit payload'i + ordered_at): Ombor buyurtmadan KEYIN
+    sanalgan mahsulotni qayta ayirmaydi (owner 2026-10-24: sanoq shanba peshindan keyin,
+    o'sha kun sotuvi 23:50 da yoziladi)."""
+    payload = {"source_id": source_id, "order_reference": order_reference, "system": ANALYTICS_SYSTEM,
+               "items": [{"code": str(i["code"]), "quantity": str(i["quantity"])} for i in items]}
+    if ordered_at:
+        payload["ordered_at"] = ordered_at
+    return await ombor._client.post(path, json=payload)
 
 
 async def send_alert(ombor: OmborBridgeClient, key: str, level: str, message: str) -> bool:

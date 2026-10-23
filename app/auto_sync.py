@@ -46,6 +46,7 @@ def order_from_payload(data: dict) -> OrderRecord:
         review_status=str(data.get("review_status") or "NONE"),
         bonus_items=tuple(OrderItem(product_code=b["product"], units_total=int(b["quantity"]))
                           for b in data.get("bonus_items") or []),
+        created_at=data.get("created_at"),
     )
 
 

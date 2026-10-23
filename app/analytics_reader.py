@@ -30,6 +30,8 @@ class OrderRecord:
     # Bonus tuzatishlar ("+2 non", Analytics order_adjustments LINKED) - jismonan
     # beriladi, Ombor'dan AYIRILADI (owner qarori 2026-10-05).
     bonus_items: tuple[OrderItem, ...] = ()
+    # Buyurtma yaratilgan vaqt (ISO) - Ombor sanoqdan oldingi buyurtmani qayta ayirmaydi
+    created_at: str | None = None
 
 
 class AnalyticsReader(Protocol):
@@ -62,7 +64,7 @@ class PostgresAnalyticsReader:
         try:
             order_row = await conn.fetchrow(
                 """
-                SELECT id, is_deleted, needs_confirmation, review_status FROM orders
+                SELECT id, is_deleted, needs_confirmation, review_status, created_at FROM orders
                 WHERE telegram_chat_id = $1 AND telegram_message_id = $2
                 """,
                 chat_id,
@@ -92,6 +94,7 @@ class PostgresAnalyticsReader:
                 for r in item_rows
             ),
             bonus_items=tuple(OrderItem(product_code=r["product"], units_total=r["quantity"]) for r in bonus_rows),
+            created_at=order_row["created_at"].isoformat() if order_row["created_at"] else None,
         )
 
 
@@ -161,6 +164,7 @@ class ApiAnalyticsReader:
             review_status=str(data.get("review_status") or "NONE"),
             bonus_items=tuple(OrderItem(product_code=b["product"], units_total=int(b["quantity"]))
                               for b in data.get("bonus_items") or []),
+            created_at=data.get("created_at"),
         )
 
 
